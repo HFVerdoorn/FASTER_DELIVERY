@@ -1,36 +1,33 @@
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
 
-def fetch_and_calculate_impact():
-    # Establish database connection
-    engine = create_engine('sqlite:///mydatabase.db')
+def fetch_and_calculate_impact(query: str, broad_query: str):
+    # Database connection setup
+    engine = create_engine('mysql+pymysql://user:password@localhost/db_name')
     with engine.connect() as connection:
-        # Execute query to fetch data
-        result = connection.execute(text('SELECT * FROM my_table'))
-        data = result.fetchall()
+        # Dynamic SQL query building
+        specific_result = connection.execute(query)
+        broad_result = connection.execute(broad_query)
 
-    # Processing data
-    df = pd.DataFrame(data, columns=['column1', 'column2'])
-    impact = df['column1'] * df['column2']
-    df['impact'] = impact
+        # Process results into DataFrame
+        specific_df = pd.DataFrame(specific_result.fetchall(), columns=specific_result.keys())
+        broad_df = pd.DataFrame(broad_result.fetchall(), columns=broad_result.keys())
 
-    # Uplift mapping
-    uplift_mapping = {
-        'low': 'No Significant Impact',
-        'medium': 'Moderate Impact',
-        'high': 'High Impact'
-    }
-    df['uplift'] = df['impact'].apply(lambda x: uplift_mapping['low'] if x < 10 else (uplift_mapping['medium'] if x < 20 else uplift_mapping['high']))
+        # CVR impact calculations
+        cvr_impact = specific_df['conversion_rate'] * 100
 
-    return df
+        # Uplift mapping
+        uplift_mapping = {'2DD': 0.07, '3DD': 0.03, 'BOLT': 0.01, 'STANDARD': 0.00}
+        specific_df['uplift'] = specific_df['type'].map(uplift_mapping)
 
-# Example Usage
-if __name__ == '__main__':
-    impact_df = fetch_and_calculate_impact()
-    print(impact_df)
+        return specific_df, broad_df, cvr_impact
 
-# Another Example
-example_data = {'column1': [5, 10, 15], 'column2': [2, 3, 4]}
-example_df = pd.DataFrame(example_data)
-print(example_df)
+# Usage examples
+specific_query = 'SELECT * FROM sales WHERE type="2DD";'
+broad_query = 'SELECT * FROM sales;'
+specific_data, broad_data, impact = fetch_and_calculate_impact(specific_query, broad_query)
+
+print(specific_data)
+print(broad_data)
+print(impact)
